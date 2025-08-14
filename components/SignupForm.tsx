@@ -19,7 +19,7 @@ export function SignupForm() {
     e.preventDefault();
     try {
       await signup(username, email, password);
-      router.push('/dashboard');
+      window.location.href = '/';
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Signup failed');
     }

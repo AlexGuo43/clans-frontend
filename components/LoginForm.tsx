@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
@@ -12,7 +11,6 @@ export function LoginForm() {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
-  const router = useRouter();
   const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -25,7 +23,8 @@ export function LoginForm() {
         title: "Success!",
         description: "You've been successfully logged in.",
       });
-      router.push('/dashboard');
+      // Use window.location for immediate redirect
+      window.location.href = '/';
     } catch (err) {
       toast({
         variant: "destructive",

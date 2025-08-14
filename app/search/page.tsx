@@ -1,28 +1,28 @@
 'use client';
 
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { ArrowBigDown, ArrowBigUp, MessageSquare, Share2 } from "lucide-react"
-import { useState } from "react"
 import { useAuth } from "@/hooks/useAuth"
 import { votePost } from "@/lib/auth"
 import { useToast } from "@/hooks/use-toast"
-import { Sidebar } from "@/components/Sidebar"
 
 interface Post {
-  id: string
-  title: string
-  content: string
-  author: string
-  votes: number
-  commentCount: number
-  subreddit: string
-  createdAt: string
+  id: string;
+  title: string;
+  content: string;
+  author: string;
+  votes: number;
+  commentCount: number;
+  clan: string;
+  createdAt: string;
 }
 
-// Mock data - in a real app this would come from your database
-const MOCK_POSTS: Post[] = [
+// Mock data - in a real app this would come from search API
+const ALL_POSTS: Post[] = [
   {
     id: "1",
     title: "Just found this amazing programming tutorial",
@@ -30,7 +30,7 @@ const MOCK_POSTS: Post[] = [
     author: "techie123",
     votes: 142,
     commentCount: 23,
-    subreddit: "programming",
+    clan: "programming",
     createdAt: "2 hours ago"
   },
   {
@@ -40,14 +40,40 @@ const MOCK_POSTS: Post[] = [
     author: "vimmaster",
     votes: 89,
     commentCount: 45,
-    subreddit: "neovim",
+    clan: "neovim",
     createdAt: "5 hours ago"
+  },
+  {
+    id: "3",
+    title: "Learning React: A Beginner's Guide",
+    content: "Starting my React journey, here are the resources that helped me...",
+    author: "reactnewbie",
+    votes: 67,
+    commentCount: 12,
+    clan: "reactjs",
+    createdAt: "1 day ago"
   }
-]
+];
 
-export default function Home() {
-  const [posts, setPosts] = useState(MOCK_POSTS);
-  const [sortBy, setSortBy] = useState<'hot' | 'new' | 'top'>('hot');
+export default function SearchPage() {
+  const searchParams = useSearchParams();
+  const query = searchParams.get('q') || '';
+  const [posts, setPosts] = useState<Post[]>([]);
+
+  useEffect(() => {
+    // Filter posts based on search query
+    if (query.trim()) {
+      const filtered = ALL_POSTS.filter(post => 
+        post.title.toLowerCase().includes(query.toLowerCase()) ||
+        post.content.toLowerCase().includes(query.toLowerCase()) ||
+        post.clan.toLowerCase().includes(query.toLowerCase()) ||
+        post.author.toLowerCase().includes(query.toLowerCase())
+      );
+      setPosts(filtered);
+    } else {
+      setPosts([]);
+    }
+  }, [query]);
 
   const handleVoteUpdate = (postId: string, newVotes: number) => {
     setPosts(posts.map(post => 
@@ -55,68 +81,45 @@ export default function Home() {
     ));
   };
 
-  const sortedPosts = [...posts].sort((a, b) => {
-    switch (sortBy) {
-      case 'top':
-        return b.votes - a.votes;
-      case 'new':
-        // For demo purposes, using votes as proxy for time
-        return b.id.localeCompare(a.id);
-      case 'hot':
-      default:
-        // Hot = combination of votes and recency (simplified)
-        return (b.votes + b.commentCount) - (a.votes + a.commentCount);
-    }
-  });
-
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto max-w-7xl px-4 py-8">
-        <div className="flex gap-6">
-          {/* Sidebar */}
-          <div className="hidden lg:block flex-shrink-0">
-            <Sidebar />
-          </div>
-          
-          {/* Main content */}
-          <div className="flex-1 max-w-4xl">
-            <div className="mb-8 flex items-center justify-between">
-              <h1 className="text-2xl font-bold">Posts</h1>
-              <Link href="/create-post">
-                <Button>Create Post</Button>
-              </Link>
-            </div>
-            
-            {/* Sort buttons */}
-            <div className="mb-6 flex gap-2">
-              {(['hot', 'new', 'top'] as const).map((sort) => (
-                <Button
-                  key={sort}
-                  variant={sortBy === sort ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setSortBy(sort)}
-                  className="capitalize"
-                >
-                  {sort}
-                </Button>
-              ))}
-            </div>
-            
-            <div className="space-y-4">
-              {sortedPosts.map((post) => (
-                <PostCard key={post.id} post={post} onVoteUpdate={handleVoteUpdate} />
-              ))}
-            </div>
-          </div>
+      <div className="container mx-auto max-w-4xl px-4 py-8">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold mb-2">
+            Search Results {query && `for "${query}"`}
+          </h1>
+          <p className="text-gray-600">
+            {posts.length} {posts.length === 1 ? 'result' : 'results'} found
+          </p>
         </div>
+        
+        {posts.length > 0 ? (
+          <div className="space-y-4">
+            {posts.map((post) => (
+              <PostCard key={post.id} post={post} onVoteUpdate={handleVoteUpdate} query={query} />
+            ))}
+          </div>
+        ) : (
+          <Card>
+            <CardContent className="p-8 text-center">
+              <p className="text-gray-500 text-lg mb-4">
+                {query ? `No results found for "${query}"` : 'Enter a search term to find posts'}
+              </p>
+              <Link href="/">
+                <Button>Browse All Posts</Button>
+              </Link>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
-  )
+  );
 }
 
-function PostCard({ post, onVoteUpdate }: { 
+function PostCard({ post, onVoteUpdate, query }: { 
   post: Post; 
   onVoteUpdate: (postId: string, newVotes: number) => void;
+  query: string;
 }) {
   const { token, isAuthenticated } = useAuth();
   const { toast } = useToast();
@@ -138,7 +141,7 @@ function PostCard({ post, onVoteUpdate }: {
     setIsVoting(true);
     
     try {
-      const response = await votePost(token, post.id, voteType);
+      await votePost(token, post.id, voteType);
       
       // Update local state
       if (userVote === voteType) {
@@ -162,6 +165,20 @@ function PostCard({ post, onVoteUpdate }: {
     } finally {
       setIsVoting(false);
     }
+  };
+
+  // Highlight search terms in text
+  const highlightText = (text: string) => {
+    if (!query) return text;
+    
+    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    const parts = text.split(regex);
+    
+    return parts.map((part, index) => 
+      regex.test(part) ? (
+        <mark key={index} className="bg-yellow-200 px-1 rounded">{part}</mark>
+      ) : part
+    );
   };
 
   return (
@@ -194,22 +211,14 @@ function PostCard({ post, onVoteUpdate }: {
           {/* Post content */}
           <div className="flex-1">
             <div className="mb-1 text-sm text-gray-500">
-              Posted by{' '}
-              <Link href={`/user/${post.author}`} className="hover:underline">
-                u/{post.author}
-              </Link>{' '}
-              in{' '}
-              <Link href={`/c/${post.subreddit}`} className="hover:underline">
-                c/{post.subreddit}
-              </Link>{' '}
-              • {post.createdAt}
+              Posted by u/{highlightText(post.author)} in c/{highlightText(post.clan)} • {post.createdAt}
             </div>
             <Link href={`/post/${post.id}`}>
               <h2 className="mb-2 text-xl font-semibold hover:text-blue-600 transition-colors cursor-pointer">
-                {post.title}
+                {highlightText(post.title)}
               </h2>
             </Link>
-            <p className="mb-4 text-gray-700">{post.content}</p>
+            <p className="mb-4 text-gray-700">{highlightText(post.content)}</p>
             
             {/* Action buttons */}
             <div className="flex gap-4">
@@ -228,5 +237,5 @@ function PostCard({ post, onVoteUpdate }: {
         </div>
       </CardContent>
     </Card>
-  )
+  );
 }
