@@ -58,16 +58,22 @@ export default function ClanPage() {
   });
 
   // Normalize post data from backend  
-  const normalizePost = (post: any): Post => ({
-    id: post.id,
-    title: post.title,
-    content: post.content,
-    author: post.username || post.author || post.author_id || 'Unknown',
-    votes: post.vote_count || post.vote_score || post.votes || 0,
-    commentCount: post.comment_count || post.commentCount || 0,
-    clan: post.clan_name || post.clan || post.subreddit || 'general',
-    createdAt: post.created_at || post.createdAt || 'Unknown'
-  });
+  const normalizePost = (post: any): Post => {
+    // Try to get clan name from various fields, but log what we're getting
+    const clanName = post.clan_name || post.clan || post.subreddit || 'general';
+    console.log('Post', post.id, 'clan_id:', post.clan_id, 'clan_name:', post.clan_name, 'using:', clanName);
+    
+    return {
+      id: post.id,
+      title: post.title,
+      content: post.content,
+      author: post.username || post.author || post.author_id || 'Unknown',
+      votes: post.vote_count || post.vote_score || post.votes || 0,
+      commentCount: post.comment_count || post.commentCount || 0,
+      clan: clanName,
+      createdAt: post.created_at || post.createdAt || 'Unknown'
+    };
+  };
 
   // Fetch clan data and posts
   useEffect(() => {

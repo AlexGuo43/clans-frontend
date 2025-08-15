@@ -64,17 +64,29 @@ export async function getDashboard(token: string) {
 export async function createPost(token: string, postData: {
   title: string;
   content: string;
-  subreddit: string; // This will map to clan on the backend
+  subreddit: string; // This is the clan name, need to convert to clan_id
 }) {
+  // First, get the clan ID from the clan name
+  let clanId: number;
+  try {
+    const clan = await getClanByName(postData.subreddit);
+    clanId = parseInt(clan.id);
+    console.log('Found clan:', clan.name, 'with ID:', clanId);
+  } catch (error) {
+    console.error('Failed to find clan:', postData.subreddit, error);
+    throw new Error(`Clan "${postData.subreddit}" not found`);
+  }
+
   // Map frontend field to backend expectation
   const backendData = {
     title: postData.title,
     content: postData.content,
-    clan: postData.subreddit, // Map subreddit to clan for backend
+    clan_id: clanId, // Backend expects clan_id as integer
   };
 
   console.log('Creating post with token:', token?.substring(0, 20) + '...');
-  console.log('Post data:', backendData);
+  console.log('Post data being sent:', backendData);
+  console.log('Original clan name:', postData.subreddit, '-> clan_id:', clanId);
 
   // Try different authorization header formats
   const headers: Record<string, string> = {
@@ -100,7 +112,8 @@ export async function createPost(token: string, postData: {
 
   if (!response.ok) {
     const error = await response.text();
-    console.error('Create post error:', error);
+    console.error('Create post error response:', error);
+    console.error('Request was:', JSON.stringify(backendData));
     throw new Error(error || `HTTP ${response.status}: Failed to create post`);
   }
 
