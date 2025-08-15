@@ -142,7 +142,7 @@ export default function ClanPage() {
             <div className="mb-6">
               <h1 className="text-3xl font-bold mb-2">c/{clan.name}</h1>
               <div className="flex gap-4 items-center">
-                <Link href="/create-post">
+                <Link href={`/create-post?clan=${clan.name}`}>
                   <Button>Create Post</Button>
                 </Link>
                 <Button 
@@ -164,7 +164,7 @@ export default function ClanPage() {
               <Card>
                 <CardContent className="p-8 text-center">
                   <p className="text-gray-500 text-lg mb-4">No posts in this community yet</p>
-                  <Link href="/create-post">
+                  <Link href={`/create-post?clan=${clan.name}`}>
                     <Button>Be the first to post!</Button>
                   </Link>
                 </CardContent>
@@ -198,7 +198,7 @@ export default function ClanPage() {
                   >
                     {isJoined ? "Joined" : "Join c/" + clan.name}
                   </Button>
-                  <Link href="/create-post">
+                  <Link href={`/create-post?clan=${clan.name}`}>
                     <Button variant="outline" className="w-full">
                       Create Post
                     </Button>

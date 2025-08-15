@@ -4,9 +4,9 @@ import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ArrowBigDown, ArrowBigUp, MessageSquare, Share2 } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useAuth } from "@/hooks/useAuth"
-import { votePost } from "@/lib/auth"
+import { votePost, getPosts } from "@/lib/auth"
 import { useToast } from "@/hooks/use-toast"
 import { Sidebar } from "@/components/Sidebar"
 
@@ -16,9 +16,13 @@ interface Post {
   content: string
   author: string
   votes: number
+  vote_score?: number // Backend might use this instead
   commentCount: number
+  comment_count?: number // Backend might use this instead
   subreddit: string
+  clan?: string // Backend uses this
   createdAt: string
+  created_at?: string // Backend might use this format
 }
 
 // Mock data - in a real app this would come from your database
@@ -46,8 +50,46 @@ const MOCK_POSTS: Post[] = [
 ]
 
 export default function Home() {
-  const [posts, setPosts] = useState(MOCK_POSTS);
+  const [posts, setPosts] = useState<Post[]>([]);
   const [sortBy, setSortBy] = useState<'hot' | 'new' | 'top'>('hot');
+  const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
+
+  // Normalize post data from backend
+  const normalizePost = (post: any): Post => ({
+    id: post.id,
+    title: post.title,
+    content: post.content,
+    author: post.author || post.author_id,
+    votes: post.vote_score || post.votes || 0,
+    commentCount: post.comment_count || post.commentCount || 0,
+    subreddit: post.clan || post.subreddit || 'general',
+    createdAt: post.created_at || post.createdAt || 'Unknown'
+  });
+
+  // Fetch posts from backend
+  useEffect(() => {
+    const fetchPosts = async () => {
+      try {
+        const data = await getPosts();
+        const normalizedPosts = Array.isArray(data) ? data.map(normalizePost) : [];
+        setPosts(normalizedPosts);
+      } catch (error) {
+        console.error('Failed to fetch posts:', error);
+        // Fall back to mock data if API fails
+        setPosts(MOCK_POSTS);
+        toast({
+          title: "Notice",
+          description: "Using demo data - backend not available",
+          variant: "default",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchPosts();
+  }, [toast]);
 
   const handleVoteUpdate = (postId: string, newVotes: number) => {
     setPosts(posts.map(post => 
@@ -103,9 +145,26 @@ export default function Home() {
             </div>
             
             <div className="space-y-4">
-              {sortedPosts.map((post) => (
-                <PostCard key={post.id} post={post} onVoteUpdate={handleVoteUpdate} />
-              ))}
+              {isLoading ? (
+                <Card>
+                  <CardContent className="p-8 text-center">
+                    <p className="text-gray-500">Loading posts...</p>
+                  </CardContent>
+                </Card>
+              ) : sortedPosts.length > 0 ? (
+                sortedPosts.map((post) => (
+                  <PostCard key={post.id} post={post} onVoteUpdate={handleVoteUpdate} />
+                ))
+              ) : (
+                <Card>
+                  <CardContent className="p-8 text-center">
+                    <p className="text-gray-500 text-lg mb-4">No posts yet</p>
+                    <Link href="/create-post">
+                      <Button>Create the first post!</Button>
+                    </Link>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </div>
         </div>

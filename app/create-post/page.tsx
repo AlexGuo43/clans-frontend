@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { createPost } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,16 @@ export default function CreatePostPage() {
   
   const { token, isAuthenticated } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
+
+  // Auto-populate clan from URL parameter
+  useEffect(() => {
+    const clanParam = searchParams.get('clan');
+    if (clanParam) {
+      setClan(clanParam);
+    }
+  }, [searchParams]);
 
   if (!isAuthenticated) {
     router.push('/login');
