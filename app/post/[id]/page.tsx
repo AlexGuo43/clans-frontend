@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-import { getPost, getComments, createComment, votePost, voteComment } from '@/lib/auth';
+import { getPost, getComments, createComment, createReply, votePost, voteComment } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
@@ -32,12 +32,17 @@ interface Comment {
   content: string;
   author: string;
   author_id?: string;
+  username?: string;
   votes: number;
   vote_score?: number;
+  vote_count?: number;
   createdAt: string;
   created_at?: string;
   postId?: string;
   post_id?: string;
+  replies?: Comment[];
+  reply_count?: number;
+  parent_id?: string;
 }
 
 // Mock data for now
@@ -80,6 +85,7 @@ export default function PostPage() {
   const [isVoting, setIsVoting] = useState(false);
   const [userVote, setUserVote] = useState<'up' | 'down' | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
   
   const { token, isAuthenticated } = useAuth();
   const { toast } = useToast();
@@ -100,9 +106,12 @@ export default function PostPage() {
   const normalizeComment = (comment: any): Comment => ({
     id: comment.id,
     content: comment.content,
-    author: comment.author || comment.author_id || 'Unknown',
-    votes: comment.vote_score || comment.votes || 0,
-    createdAt: comment.created_at || comment.createdAt || 'Unknown'
+    author: comment.author || comment.username || comment.author_id || 'Unknown',
+    votes: comment.vote_score || comment.vote_count || comment.votes || 0,
+    createdAt: comment.created_at || comment.createdAt || 'Unknown',
+    replies: comment.replies ? comment.replies.map(normalizeComment) : [],
+    reply_count: comment.reply_count || (comment.replies ? comment.replies.length : 0),
+    parent_id: comment.parent_id
   });
 
   // Fetch post and comments on mount
@@ -388,13 +397,31 @@ export default function PostPage() {
         <div className="space-y-4">
           <h2 className="text-xl font-semibold">Comments</h2>
           {comments.length > 0 ? (
-            comments.map((comment) => (
-              <CommentCard 
-                key={comment.id} 
-                comment={comment} 
-                onVoteUpdate={handleCommentVoteUpdate} 
-              />
-            ))
+            <CommentThread 
+              comments={comments} 
+              depth={0}
+              postId={post.id}
+              onVoteUpdate={handleCommentVoteUpdate}
+              replyingTo={replyingTo}
+              setReplyingTo={setReplyingTo}
+              onReplySubmit={() => {
+                // Refresh comments after reply
+                const fetchComments = async () => {
+                  try {
+                    const actualPostId = post?.id || postId;
+                    const commentsData = await getComments(actualPostId);
+                    const normalizedComments = Array.isArray(commentsData) 
+                      ? commentsData.map(normalizeComment) 
+                      : [];
+                    setComments(normalizedComments);
+                  } catch (error) {
+                    console.log('Failed to refresh comments:', error);
+                  }
+                };
+                fetchComments();
+                setReplyingTo(null);
+              }}
+            />
           ) : (
             <Card>
               <CardContent className="p-6 text-center text-gray-500">
@@ -408,9 +435,73 @@ export default function PostPage() {
   );
 }
 
-function CommentCard({ comment, onVoteUpdate }: { 
+function CommentThread({ 
+  comments, 
+  depth, 
+  postId, 
+  onVoteUpdate, 
+  replyingTo, 
+  setReplyingTo, 
+  onReplySubmit 
+}: { 
+  comments: Comment[];
+  depth: number;
+  postId: string;
+  onVoteUpdate: (commentId: string, newVotes: number) => void;
+  replyingTo: string | null;
+  setReplyingTo: (id: string | null) => void;
+  onReplySubmit: () => void;
+}) {
+  return (
+    <div className="space-y-4">
+      {comments.map((comment) => (
+        <div key={comment.id} className={depth > 0 ? 'ml-6 border-l-2 border-gray-200 pl-4' : ''}>
+          <CommentCard 
+            comment={comment}
+            onVoteUpdate={onVoteUpdate}
+            onReply={(commentId) => setReplyingTo(commentId)}
+            isReplying={replyingTo === comment.id}
+            onCancelReply={() => setReplyingTo(null)}
+            postId={postId}
+            onReplySubmit={onReplySubmit}
+          />
+          
+          {/* Render replies recursively - they will be indented by the parent div */}
+          {comment.replies && comment.replies.length > 0 && (
+            <div className="mt-3">
+              <CommentThread
+                comments={comment.replies}
+                depth={depth + 1}
+                postId={postId}
+                onVoteUpdate={onVoteUpdate}
+                replyingTo={replyingTo}
+                setReplyingTo={setReplyingTo}
+                onReplySubmit={onReplySubmit}
+              />
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function CommentCard({ 
+  comment, 
+  onVoteUpdate, 
+  onReply, 
+  isReplying, 
+  onCancelReply, 
+  postId, 
+  onReplySubmit 
+}: { 
   comment: Comment;
   onVoteUpdate: (commentId: string, newVotes: number) => void;
+  onReply: (commentId: string) => void;
+  isReplying: boolean;
+  onCancelReply: () => void;
+  postId: string;
+  onReplySubmit: () => void;
 }) {
   const { token, isAuthenticated } = useAuth();
   const { toast } = useToast();
@@ -488,9 +579,124 @@ function CommentCard({ comment, onVoteUpdate }: {
             <div className="mb-1 text-sm text-gray-500">
               u/{comment.author} • {comment.createdAt}
             </div>
-            <p className="text-gray-700">{comment.content}</p>
+            <p className="text-gray-700 mb-2">{comment.content}</p>
+            
+            {/* Reply button */}
+            <div className="flex items-center gap-4 text-sm text-gray-500">
+              {isAuthenticated && (
+                <button 
+                  className="hover:text-gray-700 transition-colors"
+                  onClick={() => onReply(comment.id)}
+                >
+                  Reply {comment.reply_count ? `(${comment.reply_count})` : ''}
+                </button>
+              )}
+            </div>
+
+            {/* Reply form */}
+            {isReplying && (
+              <div className="mt-3">
+                <ReplyForm 
+                  postId={postId}
+                  parentId={comment.id}
+                  onReplySubmit={onReplySubmit}
+                  onCancel={onCancelReply}
+                />
+              </div>
+            )}
           </div>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ReplyForm({ postId, parentId, onReplySubmit, onCancel }: {
+  postId: string;
+  parentId: string;
+  onReplySubmit: () => void;
+  onCancel: () => void;
+}) {
+  const [replyContent, setReplyContent] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { token, isAuthenticated } = useAuth();
+  const { toast } = useToast();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!replyContent.trim()) {
+      toast({
+        title: "Error",
+        description: "Reply cannot be empty",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!isAuthenticated || !token) {
+      toast({
+        title: "Login required",
+        description: "You must be logged in to reply",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+    
+    try {
+      await createReply(token, postId, parentId, replyContent.trim());
+      
+      toast({
+        title: "Success",
+        description: "Reply posted!",
+      });
+      
+      setReplyContent('');
+      onReplySubmit(); // Refresh comments and close form
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to post reply",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <Card className="bg-gray-50">
+      <CardContent className="p-4">
+        <form onSubmit={handleSubmit}>
+          <Textarea
+            placeholder="Write a reply..."
+            value={replyContent}
+            onChange={(e) => setReplyContent(e.target.value)}
+            disabled={isSubmitting}
+            rows={3}
+            className="mb-3 text-sm"
+          />
+          <div className="flex gap-2">
+            <Button 
+              type="submit" 
+              size="sm"
+              disabled={isSubmitting || !replyContent.trim()}
+            >
+              {isSubmitting ? 'Posting...' : 'Reply'}
+            </Button>
+            <Button 
+              type="button" 
+              variant="outline"
+              size="sm"
+              onClick={onCancel}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+          </div>
+        </form>
       </CardContent>
     </Card>
   );

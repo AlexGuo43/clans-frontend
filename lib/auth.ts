@@ -207,6 +207,42 @@ export async function createComment(token: string, postId: string | number, cont
   return response.json();
 }
 
+export async function createReply(token: string, postId: string | number, parentId: string, content: string) {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  if (token.startsWith('Bearer ')) {
+    headers['Authorization'] = token;
+  } else {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  // Convert postId to number if it's a string
+  const post_id = typeof postId === 'string' ? parseInt(postId, 10) : postId;
+
+  const requestBody = { 
+    post_id,
+    parent_id: parentId,
+    content 
+  };
+
+  console.log('Creating reply with request body:', requestBody);
+
+  const response = await fetch(`${API_URL}/comments`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(error);
+  }
+
+  return response.json();
+}
+
 export async function updateComment(token: string, commentId: string, content: string) {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
