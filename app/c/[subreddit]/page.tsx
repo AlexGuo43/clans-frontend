@@ -62,10 +62,10 @@ export default function ClanPage() {
     id: post.id,
     title: post.title,
     content: post.content,
-    author: post.author || post.author_id || 'Unknown',
-    votes: post.vote_score || post.votes || 0,
+    author: post.username || post.author || post.author_id || 'Unknown',
+    votes: post.vote_count || post.vote_score || post.votes || 0,
     commentCount: post.comment_count || post.commentCount || 0,
-    clan: post.clan || post.subreddit || 'general',
+    clan: post.clan_name || post.clan || post.subreddit || 'general',
     createdAt: post.created_at || post.createdAt || 'Unknown'
   });
 
@@ -95,12 +95,18 @@ export default function ClanPage() {
         // Later you might want to add a backend endpoint like /api/posts?clan=clanName
         try {
           const allPosts = await getPosts();
+          console.log('All posts from backend:', allPosts);
+          console.log('Looking for clan:', clanName);
+          
           const clanPosts = Array.isArray(allPosts) 
             ? allPosts.filter(post => {
-                const postClan = post.clan || post.subreddit;
+                const postClan = post.clan_name || post.clan || post.subreddit;
+                console.log('Post clan:', postClan, 'vs', clanName, 'Match:', postClan === clanName);
                 return postClan === clanName;
               }).map(normalizePost)
             : [];
+          
+          console.log('Filtered clan posts:', clanPosts);
           setPostsState(clanPosts);
         } catch (postsError) {
           console.log('Posts not available:', postsError);
@@ -222,7 +228,11 @@ export default function ClanPage() {
               </div>
             </div>
             
-            {postsState.length > 0 ? (
+            {(() => {
+              console.log('Rendering posts. postsState.length:', postsState.length);
+              console.log('postsState contents:', postsState);
+              return postsState.length > 0;
+            })() ? (
               <div className="space-y-4">
                 {postsState.map((post) => (
                   <PostCard key={post.id} post={post} onVoteUpdate={handleVoteUpdate} />

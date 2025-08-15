@@ -372,6 +372,7 @@ export async function createClan(token: string, clanData: {
   name: string;
   displayName?: string;
   description: string;
+  isPublic?: boolean;
 }) {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -389,6 +390,7 @@ export async function createClan(token: string, clanData: {
     display_name: clanData.displayName, // Try snake_case
     displayName: clanData.displayName,  // Also send camelCase as backup
     description: clanData.description,
+    is_public: clanData.isPublic !== undefined ? clanData.isPublic : true, // Default to true if not provided
   };
 
   console.log('Sending to clan service:', backendData);

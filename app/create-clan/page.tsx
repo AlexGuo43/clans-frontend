@@ -15,6 +15,7 @@ export default function CreateClanPage() {
   const [name, setName] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [description, setDescription] = useState('');
+  const [isPublic, setIsPublic] = useState(true); // Default to public
   const [isLoading, setIsLoading] = useState(false);
   
   const { token, isAuthenticated } = useAuth();
@@ -74,6 +75,7 @@ export default function CreateClanPage() {
         name: name.trim().toLowerCase(),
         displayName: displayName.trim() || name.trim(),
         description: description.trim(),
+        isPublic: isPublic,
       };
 
       console.log('Sending clan data to backend:', clanData);
@@ -176,12 +178,33 @@ export default function CreateClanPage() {
                 </p>
               </div>
 
+              <div>
+                <label className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    checked={isPublic}
+                    onChange={(e) => setIsPublic(e.target.checked)}
+                    disabled={isLoading}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-gray-900">
+                      Public clan
+                    </span>
+                    <p className="text-xs text-gray-500">
+                      Anyone can discover and join this clan. Uncheck to make it private (invite-only).
+                    </p>
+                  </div>
+                </label>
+              </div>
+
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <h3 className="font-medium text-blue-900 mb-2">Clan Guidelines</h3>
                 <ul className="text-sm text-blue-800 space-y-1">
                   <li>• Choose a clear, descriptive name</li>
                   <li>• Write a helpful description of your community's purpose</li>
                   <li>• As the creator, you'll become the clan moderator</li>
+                  <li>• Public clans appear in discovery, private clans are invite-only</li>
                   <li>• Clan names cannot be changed after creation</li>
                 </ul>
               </div>
