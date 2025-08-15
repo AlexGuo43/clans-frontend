@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-import { getPost, getComments, createComment, votePost } from '@/lib/auth';
+import { getPost, getComments, createComment, votePost, voteComment } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
@@ -17,17 +17,27 @@ interface Post {
   content: string;
   author: string;
   votes: number;
+  vote_score?: number;
   commentCount: number;
+  comment_count?: number;
   clan: string;
+  subreddit?: string;
   createdAt: string;
+  created_at?: string;
+  author_id?: string;
 }
 
 interface Comment {
   id: string;
   content: string;
   author: string;
+  author_id?: string;
   votes: number;
+  vote_score?: number;
   createdAt: string;
+  created_at?: string;
+  postId?: string;
+  post_id?: string;
 }
 
 // Mock data for now
@@ -63,15 +73,85 @@ export default function PostPage() {
   const params = useParams();
   const postId = params.id as string;
   
-  const [post, setPost] = useState<Post | null>(MOCK_POST);
-  const [comments, setComments] = useState<Comment[]>(MOCK_COMMENTS);
+  const [post, setPost] = useState<Post | null>(null);
+  const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isVoting, setIsVoting] = useState(false);
   const [userVote, setUserVote] = useState<'up' | 'down' | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   
   const { token, isAuthenticated } = useAuth();
   const { toast } = useToast();
+
+  // Normalize post data from backend
+  const normalizePost = (post: any): Post => ({
+    id: post.id,
+    title: post.title,
+    content: post.content,
+    author: post.author || post.author_id || 'Unknown',
+    votes: post.vote_score || post.votes || 0,
+    commentCount: post.comment_count || post.commentCount || 0,
+    clan: post.clan || post.subreddit || 'general',
+    createdAt: post.created_at || post.createdAt || 'Unknown'
+  });
+
+  // Normalize comment data from backend
+  const normalizeComment = (comment: any): Comment => ({
+    id: comment.id,
+    content: comment.content,
+    author: comment.author || comment.author_id || 'Unknown',
+    votes: comment.vote_score || comment.votes || 0,
+    createdAt: comment.created_at || comment.createdAt || 'Unknown'
+  });
+
+  // Fetch post and comments on mount
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setIsLoading(true);
+        
+        // Fetch post
+        const postData = await getPost(postId);
+        console.log('Raw post data from backend:', postData);
+        const normalizedPost = normalizePost(postData);
+        console.log('Normalized post:', normalizedPost);
+        console.log('URL postId:', postId, 'Post DB ID:', normalizedPost.id);
+        setPost(normalizedPost);
+
+        // Fetch comments
+        try {
+          const commentsData = await getComments(postId);
+          const normalizedComments = Array.isArray(commentsData) 
+            ? commentsData.map(normalizeComment) 
+            : [];
+          setComments(normalizedComments);
+        } catch (commentError) {
+          console.log('Comments service error:', commentError);
+          setComments([]); // Start with empty comments if service fails
+        }
+        
+      } catch (error) {
+        console.error('Failed to fetch post:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load post",
+          variant: "destructive",
+        });
+        // Don't fallback to mock for posts since we want to show real data
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [postId, toast]);
+
+  const handleCommentVoteUpdate = (commentId: string, newVotes: number) => {
+    setComments(comments.map(comment => 
+      comment.id === commentId ? { ...comment, votes: newVotes } : comment
+    ));
+  };
 
   const handleVote = async (voteType: 'up' | 'down') => {
     if (!isAuthenticated || !token || !post) {
@@ -138,18 +218,30 @@ export default function PostPage() {
     setIsSubmitting(true);
     
     try {
-      await createComment(token, postId, newComment.trim());
+      // Use the actual post database ID, not the URL parameter
+      const actualPostId = post?.id || postId;
+      console.log('Creating comment with postId:', actualPostId, 'URL param was:', postId);
+      const createdComment = await createComment(token, actualPostId, newComment.trim());
       
-      // Add new comment to local state
-      const newCommentObj: Comment = {
-        id: Date.now().toString(),
-        content: newComment.trim(),
-        author: "You",
-        votes: 0,
-        createdAt: "Just now"
-      };
+      // Refresh comments to get the latest data
+      try {
+        const commentsData = await getComments(actualPostId);
+        const normalizedComments = Array.isArray(commentsData) 
+          ? commentsData.map(normalizeComment) 
+          : [];
+        setComments(normalizedComments);
+      } catch (refreshError) {
+        // If refresh fails, add comment locally
+        const newCommentObj: Comment = {
+          id: createdComment.id || Date.now().toString(),
+          content: newComment.trim(),
+          author: "You",
+          votes: 0,
+          createdAt: "Just now"
+        };
+        setComments(prev => [newCommentObj, ...prev]);
+      }
       
-      setComments(prev => [newCommentObj, ...prev]);
       setNewComment('');
       
       if (post) {
@@ -171,10 +263,30 @@ export default function PostPage() {
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Card>
+          <CardContent className="p-8 text-center">
+            <p className="text-gray-500">Loading post...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (!post) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p>Post not found</p>
+        <Card>
+          <CardContent className="p-8 text-center">
+            <h1 className="text-2xl font-bold mb-4">Post not found</h1>
+            <p className="text-gray-600 mb-4">This post may have been deleted or doesn't exist.</p>
+            <Link href="/">
+              <Button>Back to Home</Button>
+            </Link>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -277,7 +389,11 @@ export default function PostPage() {
           <h2 className="text-xl font-semibold">Comments</h2>
           {comments.length > 0 ? (
             comments.map((comment) => (
-              <CommentCard key={comment.id} comment={comment} />
+              <CommentCard 
+                key={comment.id} 
+                comment={comment} 
+                onVoteUpdate={handleCommentVoteUpdate} 
+              />
             ))
           ) : (
             <Card>
@@ -292,17 +408,78 @@ export default function PostPage() {
   );
 }
 
-function CommentCard({ comment }: { comment: Comment }) {
+function CommentCard({ comment, onVoteUpdate }: { 
+  comment: Comment;
+  onVoteUpdate: (commentId: string, newVotes: number) => void;
+}) {
+  const { token, isAuthenticated } = useAuth();
+  const { toast } = useToast();
+  const [isVoting, setIsVoting] = useState(false);
+  const [userVote, setUserVote] = useState<'up' | 'down' | null>(null);
+
+  const handleVote = async (voteType: 'up' | 'down') => {
+    if (!isAuthenticated || !token) {
+      toast({
+        title: "Login required",
+        description: "You must be logged in to vote",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (isVoting) return;
+
+    setIsVoting(true);
+    
+    try {
+      await voteComment(token, comment.id, voteType);
+      
+      // Update local state
+      if (userVote === voteType) {
+        // Remove vote
+        setUserVote(null);
+        onVoteUpdate(comment.id, comment.votes + (voteType === 'up' ? -1 : 1));
+      } else {
+        // Add/change vote
+        const voteChange = userVote === null 
+          ? (voteType === 'up' ? 1 : -1)
+          : (voteType === 'up' ? 2 : -2);
+        setUserVote(voteType);
+        onVoteUpdate(comment.id, comment.votes + voteChange);
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to vote",
+        variant: "destructive",
+      });
+    } finally {
+      setIsVoting(false);
+    }
+  };
+
   return (
     <Card>
       <CardContent className="p-4">
         <div className="flex gap-3">
           <div className="flex flex-col items-center gap-1">
-            <button className="text-gray-400 hover:text-orange-500 transition-colors">
+            <button 
+              className={`text-gray-400 hover:text-orange-500 transition-colors ${
+                userVote === 'up' ? 'text-orange-500' : ''
+              } ${isVoting ? 'opacity-50 cursor-not-allowed' : ''}`}
+              onClick={() => handleVote('up')}
+              disabled={isVoting}
+            >
               <ArrowBigUp className="h-4 w-4" />
             </button>
             <span className="text-xs font-medium">{comment.votes}</span>
-            <button className="text-gray-400 hover:text-blue-500 transition-colors">
+            <button 
+              className={`text-gray-400 hover:text-blue-500 transition-colors ${
+                userVote === 'down' ? 'text-blue-500' : ''
+              } ${isVoting ? 'opacity-50 cursor-not-allowed' : ''}`}
+              onClick={() => handleVote('down')}
+              disabled={isVoting}
+            >
               <ArrowBigDown className="h-4 w-4" />
             </button>
           </div>

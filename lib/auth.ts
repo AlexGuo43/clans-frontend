@@ -163,7 +163,7 @@ export async function votePost(token: string, postId: string, voteType: 'up' | '
 
 // Comments
 export async function getComments(postId: string) {
-  const response = await fetch(`${API_URL}/posts/${postId}/comments`);
+  const response = await fetch(`${API_URL}/comments/post/${postId}`);
   
   if (!response.ok) {
     throw new Error('Failed to fetch comments');
@@ -172,19 +172,348 @@ export async function getComments(postId: string) {
   return response.json();
 }
 
-export async function createComment(token: string, postId: string, content: string) {
-  const response = await fetch(`${API_URL}/posts/${postId}/comments`, {
+export async function createComment(token: string, postId: string | number, content: string) {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  if (token.startsWith('Bearer ')) {
+    headers['Authorization'] = token;
+  } else {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  // Convert postId to number if it's a string
+  const post_id = typeof postId === 'string' ? parseInt(postId, 10) : postId;
+
+  const requestBody = { 
+    post_id,
+    content 
+  };
+
+  console.log('Creating comment with request body:', requestBody);
+
+  const response = await fetch(`${API_URL}/comments`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
+    headers,
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(error);
+  }
+
+  return response.json();
+}
+
+export async function updateComment(token: string, commentId: string, content: string) {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  if (token.startsWith('Bearer ')) {
+    headers['Authorization'] = token;
+  } else {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_URL}/comments/${commentId}`, {
+    method: 'PUT',
+    headers,
     body: JSON.stringify({ content }),
   });
 
   if (!response.ok) {
     const error = await response.text();
     throw new Error(error);
+  }
+
+  return response.json();
+}
+
+export async function deleteComment(token: string, commentId: string) {
+  const headers: Record<string, string> = {};
+
+  if (token.startsWith('Bearer ')) {
+    headers['Authorization'] = token;
+  } else {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_URL}/comments/${commentId}`, {
+    method: 'DELETE',
+    headers,
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(error);
+  }
+
+  return response.ok;
+}
+
+export async function voteComment(token: string, commentId: string, voteType: 'up' | 'down') {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  if (token.startsWith('Bearer ')) {
+    headers['Authorization'] = token;
+  } else {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_URL}/comments/${commentId}/vote`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ voteType }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(error);
+  }
+
+  return response.json();
+}
+
+export async function removeCommentVote(token: string, commentId: string) {
+  const headers: Record<string, string> = {};
+
+  if (token.startsWith('Bearer ')) {
+    headers['Authorization'] = token;
+  } else {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_URL}/comments/${commentId}/vote`, {
+    method: 'DELETE',
+    headers,
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(error);
+  }
+
+  return response.ok;
+}
+
+// Clan Service
+export async function getClans() {
+  const response = await fetch(`${API_URL}/clans`);
+  
+  if (!response.ok) {
+    throw new Error('Failed to fetch clans');
+  }
+
+  return response.json();
+}
+
+export async function getClan(id: string) {
+  const response = await fetch(`${API_URL}/clans/${id}`);
+  
+  if (!response.ok) {
+    throw new Error('Failed to fetch clan');
+  }
+
+  return response.json();
+}
+
+export async function getClanByName(name: string) {
+  const response = await fetch(`${API_URL}/clans/name/${name}`);
+  
+  if (!response.ok) {
+    throw new Error('Failed to fetch clan');
+  }
+
+  return response.json();
+}
+
+export async function createClan(token: string, clanData: {
+  name: string;
+  displayName?: string;
+  description: string;
+}) {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  if (token.startsWith('Bearer ')) {
+    headers['Authorization'] = token;
+  } else {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  // Map frontend field to backend expectation
+  const backendData = {
+    name: clanData.name,
+    display_name: clanData.displayName, // Try snake_case
+    displayName: clanData.displayName,  // Also send camelCase as backup
+    description: clanData.description,
+  };
+
+  console.log('Sending to clan service:', backendData);
+
+  const response = await fetch(`${API_URL}/clans`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(backendData),
+  });
+
+  console.log('Clan creation response status:', response.status);
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error('Clan creation error:', error);
+    throw new Error(error);
+  }
+
+  return response.json();
+}
+
+export async function updateClan(token: string, clanId: string, clanData: {
+  displayName?: string;
+  description?: string;
+}) {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  if (token.startsWith('Bearer ')) {
+    headers['Authorization'] = token;
+  } else {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_URL}/clans/${clanId}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(clanData),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(error);
+  }
+
+  return response.json();
+}
+
+export async function deleteClan(token: string, clanId: string) {
+  const headers: Record<string, string> = {};
+
+  if (token.startsWith('Bearer ')) {
+    headers['Authorization'] = token;
+  } else {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_URL}/clans/${clanId}`, {
+    method: 'DELETE',
+    headers,
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(error);
+  }
+
+  return response.ok;
+}
+
+// Clan Membership
+export async function joinClan(token: string, clanId: string) {
+  const headers: Record<string, string> = {};
+
+  if (token.startsWith('Bearer ')) {
+    headers['Authorization'] = token;
+  } else {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_URL}/clans/${clanId}/join`, {
+    method: 'POST',
+    headers,
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(error);
+  }
+
+  return response.json();
+}
+
+export async function leaveClan(token: string, clanId: string) {
+  const headers: Record<string, string> = {};
+
+  if (token.startsWith('Bearer ')) {
+    headers['Authorization'] = token;
+  } else {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_URL}/clans/${clanId}/leave`, {
+    method: 'POST',
+    headers,
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(error);
+  }
+
+  return response.ok;
+}
+
+export async function getClanMembers(clanId: string) {
+  const response = await fetch(`${API_URL}/clans/${clanId}/members`);
+  
+  if (!response.ok) {
+    throw new Error('Failed to fetch clan members');
+  }
+
+  return response.json();
+}
+
+export async function getUserClans(token: string) {
+  const headers: Record<string, string> = {};
+
+  if (token.startsWith('Bearer ')) {
+    headers['Authorization'] = token;
+  } else {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_URL}/users/clans`, {
+    headers,
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch user clans');
+  }
+
+  return response.json();
+}
+
+export async function getClanMembershipStatus(token: string, clanId: string) {
+  const headers: Record<string, string> = {};
+
+  if (token.startsWith('Bearer ')) {
+    headers['Authorization'] = token;
+  } else {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_URL}/clans/${clanId}/membership`, {
+    headers,
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch membership status');
   }
 
   return response.json();

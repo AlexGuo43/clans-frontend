@@ -1,16 +1,21 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Users, Plus, Home, TrendingUp, Clock, Award, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { getClans, getUserClans, joinClan, leaveClan } from '@/lib/auth';
+import { useToast } from '@/hooks/use-toast';
 
 interface Clan {
+  id: string;
   name: string;
   displayName: string;
+  display_name?: string;
   memberCount: number;
+  member_count?: number;
   description: string;
   isJoined?: boolean;
 }
@@ -68,22 +73,102 @@ const FEED_OPTIONS = [
 ];
 
 export function Sidebar() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, token } = useAuth();
+  const { toast } = useToast();
   const [showAllClans, setShowAllClans] = useState(false);
-  const [joinedClans, setJoinedClans] = useState<string[]>(
-    POPULAR_CLANS.filter(clan => clan.isJoined).map(clan => clan.name)
-  );
+  const [allClans, setAllClans] = useState<Clan[]>([]);
+  const [userClans, setUserClans] = useState<Clan[]>([]);
+  const [joinedClanIds, setJoinedClanIds] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const toggleClanJoin = (clanName: string) => {
-    setJoinedClans(prev => 
-      prev.includes(clanName) 
-        ? prev.filter(name => name !== clanName)
-        : [...prev, clanName]
-    );
+  // Normalize clan data from backend
+  const normalizeClan = (clan: any): Clan => ({
+    id: clan.id,
+    name: clan.name,
+    displayName: clan.display_name || clan.displayName || clan.name,
+    memberCount: clan.member_count || clan.memberCount || 0,
+    description: clan.description || '',
+  });
+
+  // Fetch clans data
+  useEffect(() => {
+    const fetchClansData = async () => {
+      try {
+        setIsLoading(true);
+        
+        // Fetch all public clans
+        const clansData = await getClans();
+        const normalizedClans = Array.isArray(clansData) 
+          ? clansData.map(normalizeClan) 
+          : [];
+        setAllClans(normalizedClans);
+
+        // Fetch user's clans if authenticated
+        if (isAuthenticated && token) {
+          try {
+            const userClansData = await getUserClans(token);
+            const normalizedUserClans = Array.isArray(userClansData) 
+              ? userClansData.map(normalizeClan) 
+              : [];
+            setUserClans(normalizedUserClans);
+            setJoinedClanIds(normalizedUserClans.map(clan => clan.id));
+          } catch (userClansError) {
+            console.log('User clans not available:', userClansError);
+          }
+        }
+        
+      } catch (error) {
+        console.log('Clans service error, using fallback:', error);
+        // Fallback to mock data
+        setAllClans(POPULAR_CLANS);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchClansData();
+  }, [isAuthenticated, token]);
+
+  const handleClanJoin = async (clan: Clan) => {
+    if (!isAuthenticated || !token) {
+      toast({
+        title: "Login required",
+        description: "You must be logged in to join clans",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const isCurrentlyJoined = joinedClanIds.includes(clan.id);
+      
+      if (isCurrentlyJoined) {
+        await leaveClan(token, clan.id);
+        setJoinedClanIds(prev => prev.filter(id => id !== clan.id));
+        setUserClans(prev => prev.filter(c => c.id !== clan.id));
+        toast({
+          title: "Left clan",
+          description: `You left c/${clan.name}`,
+        });
+      } else {
+        await joinClan(token, clan.id);
+        setJoinedClanIds(prev => [...prev, clan.id]);
+        setUserClans(prev => [...prev, clan]);
+        toast({
+          title: "Joined clan",
+          description: `You joined c/${clan.name}`,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update membership",
+        variant: "destructive",
+      });
+    }
   };
 
-  const displayedClans = showAllClans ? POPULAR_CLANS : POPULAR_CLANS.slice(0, 5);
-  const myClans = POPULAR_CLANS.filter(clan => joinedClans.includes(clan.name));
+  const displayedClans = showAllClans ? allClans : allClans.slice(0, 5);
 
   return (
     <div className="w-80 space-y-4">
@@ -126,7 +211,7 @@ export function Sidebar() {
       </Card>
 
       {/* My Clans */}
-      {isAuthenticated && myClans.length > 0 && (
+      {isAuthenticated && userClans.length > 0 && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-gray-600 uppercase tracking-wide">
@@ -135,12 +220,12 @@ export function Sidebar() {
           </CardHeader>
           <CardContent className="pt-0">
             <div className="space-y-1">
-              {myClans.map((clan) => (
-                <Link key={clan.name} href={`/c/${clan.name}`}>
+              {userClans.map((clan) => (
+                <Link key={clan.id} href={`/c/${clan.name}`}>
                   <div className="flex items-center justify-between p-2 rounded-md hover:bg-gray-100 transition-colors group">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
-                        {clan.displayName[0]}
+                        {clan.displayName[0].toUpperCase()}
                       </div>
                       <div>
                         <div className="font-medium text-sm">c/{clan.name}</div>
@@ -160,61 +245,79 @@ export function Sidebar() {
       {/* Popular Clans */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium text-gray-600 uppercase tracking-wide">
-            Popular Clans
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-medium text-gray-600 uppercase tracking-wide">
+              Popular Clans
+            </CardTitle>
+            {isAuthenticated && (
+              <Link href="/create-clan">
+                <Button variant="outline" size="sm">
+                  <Plus className="h-3 w-3 mr-1" />
+                  Create
+                </Button>
+              </Link>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="pt-0">
-          <div className="space-y-1">
-            {displayedClans.map((clan) => (
-              <div key={clan.name} className="flex items-center justify-between p-2 rounded-md hover:bg-gray-100 transition-colors group">
-                <Link href={`/c/${clan.name}`} className="flex items-center gap-3 flex-1">
-                  <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
-                    {clan.displayName[0]}
+          {isLoading ? (
+            <div className="p-4 text-center text-gray-500">
+              Loading clans...
+            </div>
+          ) : (
+            <>
+              <div className="space-y-1">
+                {displayedClans.map((clan) => (
+                  <div key={clan.id} className="flex items-center justify-between p-2 rounded-md hover:bg-gray-100 transition-colors group">
+                    <Link href={`/c/${clan.name}`} className="flex items-center gap-3 flex-1">
+                      <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                        {clan.displayName[0].toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="font-medium text-sm">c/{clan.name}</div>
+                        <div className="text-xs text-gray-500">
+                          {clan.memberCount.toLocaleString()} members
+                        </div>
+                      </div>
+                    </Link>
+                    {isAuthenticated && (
+                      <Button
+                        variant={joinedClanIds.includes(clan.id) ? "outline" : "default"}
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handleClanJoin(clan);
+                        }}
+                        className="ml-2"
+                      >
+                        {joinedClanIds.includes(clan.id) ? 'Joined' : 'Join'}
+                      </Button>
+                    )}
                   </div>
-                  <div>
-                    <div className="font-medium text-sm">c/{clan.name}</div>
-                    <div className="text-xs text-gray-500">
-                      {clan.memberCount.toLocaleString()} members
-                    </div>
-                  </div>
-                </Link>
-                {isAuthenticated && (
-                  <Button
-                    variant={joinedClans.includes(clan.name) ? "outline" : "default"}
-                    size="sm"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      toggleClanJoin(clan.name);
-                    }}
-                    className="ml-2"
-                  >
-                    {joinedClans.includes(clan.name) ? 'Joined' : 'Join'}
-                  </Button>
-                )}
+                ))}
               </div>
-            ))}
-          </div>
-          
-          {POPULAR_CLANS.length > 5 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowAllClans(!showAllClans)}
-              className="w-full mt-2 text-xs"
-            >
-              {showAllClans ? (
-                <>
-                  <ChevronUp className="mr-1 h-3 w-3" />
-                  Show Less
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="mr-1 h-3 w-3" />
-                  View All Clans
-                </>
+              
+              {allClans.length > 5 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowAllClans(!showAllClans)}
+                  className="w-full mt-2 text-xs"
+                >
+                  {showAllClans ? (
+                    <>
+                      <ChevronUp className="mr-1 h-3 w-3" />
+                      Show Less
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="mr-1 h-3 w-3" />
+                      View All Clans
+                    </>
+                  )}
+                </Button>
               )}
-            </Button>
+            </>
           )}
         </CardContent>
       </Card>

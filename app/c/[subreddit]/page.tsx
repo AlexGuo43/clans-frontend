@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
 import { ArrowBigDown, ArrowBigUp, MessageSquare, Share2, Users, Calendar } from "lucide-react"
 import { useAuth } from "@/hooks/useAuth"
-import { votePost } from "@/lib/auth"
+import { votePost, getClanByName, getClanMembershipStatus, joinClan, leaveClan, getPosts } from "@/lib/auth"
 import { useToast } from "@/hooks/use-toast"
 
 interface Post {
@@ -22,98 +22,165 @@ interface Post {
 }
 
 interface Clan {
+  id: string;
   name: string;
+  displayName?: string;
+  display_name?: string;
   description: string;
   memberCount: number;
+  member_count?: number;
   createdAt: string;
+  created_at?: string;
 }
 
-// Mock data
-const CLANS: Record<string, Clan> = {
-  programming: {
-    name: "programming",
-    description: "Computer Programming",
-    memberCount: 4567890,
-    createdAt: "Jan 2008"
-  },
-  neovim: {
-    name: "neovim",
-    description: "Neovim is a project that seeks to aggressively refactor Vim",
-    memberCount: 89234,
-    createdAt: "Mar 2015"
-  },
-  reactjs: {
-    name: "reactjs",
-    description: "A JavaScript library for building user interfaces",
-    memberCount: 234567,
-    createdAt: "Jun 2014"
-  }
-};
-
-const POSTS_BY_CLAN: Record<string, Post[]> = {
-  programming: [
-    {
-      id: "1",
-      title: "Just found this amazing programming tutorial",
-      content: "Check out this awesome resource I found for learning TypeScript...",
-      author: "techie123",
-      votes: 142,
-      commentCount: 23,
-      clan: "programming",
-      createdAt: "2 hours ago"
-    },
-    {
-      id: "4",
-      title: "Best practices for code reviews",
-      content: "After working at several companies, here's what I've learned about effective code reviews...",
-      author: "seniordev",
-      votes: 89,
-      commentCount: 34,
-      clan: "programming",
-      createdAt: "6 hours ago"
-    }
-  ],
-  neovim: [
-    {
-      id: "2",
-      title: "My experience switching to Neovim",
-      content: "After 6 months of using Neovim, here are my thoughts...",
-      author: "vimmaster",
-      votes: 89,
-      commentCount: 45,
-      clan: "neovim",
-      createdAt: "5 hours ago"
-    }
-  ],
-  reactjs: [
-    {
-      id: "3",
-      title: "Learning React: A Beginner's Guide",
-      content: "Starting my React journey, here are the resources that helped me...",
-      author: "reactnewbie",
-      votes: 67,
-      commentCount: 12,
-      clan: "reactjs",
-      createdAt: "1 day ago"
-    }
-  ]
-};
 
 export default function ClanPage() {
   const params = useParams();
   const clanName = params.subreddit as string;
   
-  const clan = CLANS[clanName];
-  const posts = POSTS_BY_CLAN[clanName] || [];
-  
-  const [postsState, setPostsState] = useState(posts);
+  const [clan, setClan] = useState<Clan | null>(null);
+  const [postsState, setPostsState] = useState<Post[]>([]);
   const [isJoined, setIsJoined] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isJoining, setIsJoining] = useState(false);
+  
+  const { token, isAuthenticated } = useAuth();
+  const { toast } = useToast();
+
+  // Normalize clan data from backend
+  const normalizeClan = (clanData: any): Clan => ({
+    id: clanData.id,
+    name: clanData.name,
+    displayName: clanData.display_name || clanData.displayName || clanData.name,
+    description: clanData.description || '',
+    memberCount: clanData.member_count || clanData.memberCount || 0,
+    createdAt: clanData.created_at || clanData.createdAt || 'Unknown'
+  });
+
+  // Normalize post data from backend  
+  const normalizePost = (post: any): Post => ({
+    id: post.id,
+    title: post.title,
+    content: post.content,
+    author: post.author || post.author_id || 'Unknown',
+    votes: post.vote_score || post.votes || 0,
+    commentCount: post.comment_count || post.commentCount || 0,
+    clan: post.clan || post.subreddit || 'general',
+    createdAt: post.created_at || post.createdAt || 'Unknown'
+  });
+
+  // Fetch clan data and posts
+  useEffect(() => {
+    const fetchClanData = async () => {
+      try {
+        setIsLoading(true);
+        
+        // Fetch clan info
+        const clanData = await getClanByName(clanName);
+        const normalizedClan = normalizeClan(clanData);
+        setClan(normalizedClan);
+
+        // Fetch membership status if authenticated
+        if (isAuthenticated && token) {
+          try {
+            const membershipStatus = await getClanMembershipStatus(token, normalizedClan.id);
+            setIsJoined(!!membershipStatus.isMember || !!membershipStatus.is_member);
+          } catch (membershipError) {
+            console.log('Membership status not available:', membershipError);
+            setIsJoined(false);
+          }
+        }
+
+        // Fetch posts for this clan - for now we'll fetch all posts and filter
+        // Later you might want to add a backend endpoint like /api/posts?clan=clanName
+        try {
+          const allPosts = await getPosts();
+          const clanPosts = Array.isArray(allPosts) 
+            ? allPosts.filter(post => {
+                const postClan = post.clan || post.subreddit;
+                return postClan === clanName;
+              }).map(normalizePost)
+            : [];
+          setPostsState(clanPosts);
+        } catch (postsError) {
+          console.log('Posts not available:', postsError);
+          setPostsState([]);
+        }
+        
+      } catch (error) {
+        console.error('Failed to fetch clan:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load clan information",
+          variant: "destructive",
+        });
+        setClan(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchClanData();
+  }, [clanName, isAuthenticated, token, toast]);
 
   const handleVoteUpdate = (postId: string, newVotes: number) => {
     setPostsState(postsState.map(post => 
       post.id === postId ? { ...post, votes: newVotes } : post
     ));
   };
+
+  const handleJoinLeave = async () => {
+    if (!isAuthenticated || !token || !clan) {
+      toast({
+        title: "Login required",
+        description: "You must be logged in to join clans",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsJoining(true);
+    
+    try {
+      if (isJoined) {
+        await leaveClan(token, clan.id);
+        setIsJoined(false);
+        toast({
+          title: "Left clan",
+          description: `You left c/${clan.name}`,
+        });
+      } else {
+        await joinClan(token, clan.id);
+        setIsJoined(true);
+        toast({
+          title: "Joined clan",
+          description: `You joined c/${clan.name}`,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update membership",
+        variant: "destructive",
+      });
+    } finally {
+      setIsJoining(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="container mx-auto max-w-4xl px-4 py-8">
+          <Card>
+            <CardContent className="p-8 text-center">
+              <p className="text-gray-500">Loading clan...</p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   if (!clan) {
     return (
@@ -147,9 +214,10 @@ export default function ClanPage() {
                 </Link>
                 <Button 
                   variant={isJoined ? "outline" : "default"}
-                  onClick={() => setIsJoined(!isJoined)}
+                  onClick={handleJoinLeave}
+                  disabled={isJoining}
                 >
-                  {isJoined ? "Joined" : "Join"}
+                  {isJoining ? "..." : (isJoined ? "Joined" : "Join")}
                 </Button>
               </div>
             </div>
@@ -194,9 +262,10 @@ export default function ClanPage() {
                   <Button 
                     className="w-full mb-3"
                     variant={isJoined ? "outline" : "default"}
-                    onClick={() => setIsJoined(!isJoined)}
+                    onClick={handleJoinLeave}
+                    disabled={isJoining}
                   >
-                    {isJoined ? "Joined" : "Join c/" + clan.name}
+                    {isJoining ? "..." : (isJoined ? "Joined" : "Join c/" + clan.name)}
                   </Button>
                   <Link href={`/create-post?clan=${clan.name}`}>
                     <Button variant="outline" className="w-full">
