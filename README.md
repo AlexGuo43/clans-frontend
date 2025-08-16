@@ -1,10 +1,13 @@
 # Clans Frontend - Reddit Clone
 
+https://clans-frontend.vercel.app/
+
 A modern Reddit clone built with Next.js, featuring communities called "Clans" with full social functionality.
 
 ## 🚀 Features
 
 ### Core Functionality
+
 - **User Authentication**: Sign up, login, JWT-based authentication
 - **Clans (Communities)**: Create and join public/private communities
 - **Posts**: Create, vote, and comment on posts within clans
@@ -12,6 +15,7 @@ A modern Reddit clone built with Next.js, featuring communities called "Clans" w
 - **Real-time Updates**: Live updates for votes, comments, and membership
 
 ### Key Components
+
 - **Home Feed**: Browse all posts with sorting options (hot, new, top)
 - **Clan Pages**: Dedicated pages for each community with member management
 - **Post Details**: Full post view with threaded comment discussions
@@ -51,85 +55,95 @@ hooks/
 ## 🔧 Setup & Installation
 
 ### Prerequisites
-- Node.js 18+ 
+
+- Node.js 18+
 - npm/yarn/pnpm
 - Backend API running on port 8000
 
 ### Installation
 
 1. **Clone the repository**
+
 ```bash
 git clone <repo-url>
 cd clans-frontend
 ```
 
 2. **Install dependencies**
+
 ```bash
 npm install
 ```
 
 3. **Start development server**
+
 ```bash
 npm run dev
 ```
 
 4. **Open in browser**
-Navigate to [http://localhost:3000](http://localhost:3000)
+   Navigate to [http://localhost:3000](http://localhost:3000)
 
 ## 🌐 API Integration
 
 The frontend integrates with a microservices backend via API Gateway on `http://localhost:8000/api`
 
 ### Backend Services
+
 - **User Service**: Authentication, user management
-- **Post Service**: Post creation, voting, retrieval  
+- **Post Service**: Post creation, voting, retrieval
 - **Comment Service**: Threaded comments, comment voting
 - **Clan Service**: Community management, membership
 
 ### Key API Functions (`lib/auth.ts`)
+
 ```typescript
 // Authentication
-login(email, password)
-signup(username, email, password)
+login(email, password);
+signup(username, email, password);
 
 // Posts
-getPosts()
-createPost(token, {title, content, subreddit})
-votePost(token, postId, voteType)
+getPosts();
+createPost(token, { title, content, subreddit });
+votePost(token, postId, voteType);
 
-// Comments  
-getComments(postId)
-createComment(token, postId, content)
-createReply(token, postId, parentId, content)
+// Comments
+getComments(postId);
+createComment(token, postId, content);
+createReply(token, postId, parentId, content);
 
 // Clans
-getClans()                    // Public clans
-getUserClans(token)           // User's clans
-createClan(token, clanData)
-joinClan(token, clanId)
+getClans(); // Public clans
+getUserClans(token); // User's clans
+createClan(token, clanData);
+joinClan(token, clanId);
 ```
 
 ## 🎨 Features Deep Dive
 
 ### Clan Management
+
 - **Public/Private Clans**: Toggle visibility during creation
 - **Member Management**: Join/leave functionality with real-time updates
 - **Clan Discovery**: Sidebar shows popular clans + user's personal clans
 - **Post Filtering**: Clan pages show only posts from that community
 
 ### Threaded Comments
+
 - **Nested Replies**: Recursive comment threading with visual indentation
 - **Reply Forms**: Inline reply creation with proper parent-child relationships
 - **Comment Voting**: Upvote/downvote individual comments
 - **Real-time Updates**: Comments refresh after posting replies
 
 ### Post Creation & Voting
+
 - **Clan Integration**: Posts automatically tagged to specific clans
 - **Rich Content**: Title + text content with markdown support
 - **Voting System**: Upvote/downvote with optimistic UI updates
 - **Author Attribution**: Posts show author and creation time
 
 ### State Management
+
 - **Authentication**: Persistent login state with Zustand
 - **Optimistic Updates**: Immediate UI feedback before backend confirmation
 - **Error Handling**: Comprehensive error states with user-friendly messages
@@ -145,17 +159,20 @@ joinClan(token, clanId)
 ## 🚀 Deployment
 
 ### Development
+
 ```bash
 npm run dev
 ```
 
 ### Production Build
+
 ```bash
 npm run build
 npm start
 ```
 
 ### Docker (if configured)
+
 ```bash
 docker build -t clans-frontend .
 docker run -p 3000:3000 clans-frontend
@@ -164,12 +181,14 @@ docker run -p 3000:3000 clans-frontend
 ## 🧩 Customization
 
 ### Adding New Features
+
 1. **API Functions**: Add new backend calls to `lib/auth.ts`
 2. **Components**: Create reusable components in `components/`
 3. **Pages**: Add new routes in `app/` directory
 4. **State**: Extend Zustand stores in `hooks/`
 
 ### Styling
+
 - **Tailwind Classes**: Modify existing components
 - **Custom Components**: Add to `components/ui/`
 - **Theme**: Update Tailwind config for brand colors
@@ -187,14 +206,17 @@ docker run -p 3000:3000 clans-frontend
 ### Common Issues
 
 **Posts not showing in correct clan:**
+
 - Check console logs for clan_id vs clan_name mapping
 - Verify backend returns proper clan information
 
 **Authentication issues:**
+
 - Clear browser localStorage and re-login
 - Check backend API is running on port 8000
 
 **Comments not loading:**
+
 - Verify post_id format (integer vs string)
 - Check foreign key relationships in backend
 
