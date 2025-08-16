@@ -326,7 +326,7 @@ export function Sidebar() {
       <Card>
         <CardContent className="p-4">
           <div className="text-center space-y-2">
-            <h3 className="font-semibold">Welcome to Reddit Clone</h3>
+            <h3 className="font-semibold">Welcome to the Clans</h3>
             <p className="text-xs text-gray-600">
               Connect with communities of people who share your interests. 
               Join clans, create posts, and engage in discussions.

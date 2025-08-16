@@ -28,8 +28,8 @@ export function Navbar() {
   return (
     <nav className="border-b bg-white">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between gap-4">
-        <Link href="/" className="text-xl font-bold text-orange-500">
-          Reddit Clone
+        <Link href="/" className="text-3xl font-bold text-orange-500 pl-4">
+          Clans
         </Link>
         
         {/* Search bar */}
