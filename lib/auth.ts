@@ -2,7 +2,10 @@ interface AuthResponse {
   token: string;
 }
 
-const API_URL = 'http://localhost:8000/api';
+const isDev = process.env.NODE_ENV === 'development';
+const API_URL = isDev 
+  ? 'http://localhost:8000/api' 
+  : 'https://api-gateway-production-a373.up.railway.app/api';
 
 export async function signup(username: string, email: string, password: string) {
   const response = await fetch(`${API_URL}/auth/signup`, {
